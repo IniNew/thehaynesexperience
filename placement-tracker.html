@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Placement Tracker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one working surface. Header bar, then a ledger-like table per concern; the workbook's indigo band heads every table. */
+:root {
+  --bg: #f4f4f8; --surface: #ffffff; --fg: #1d1b2b; --muted: #5f5c72; --line: #d9d7e4; --calc: #eeedf5;
+  --band: #44387d; --band-fg: #ffffff; --accent: #44387d; --accent-soft: #e6e3f4; --field: #fbfbfd;
+  --good: #1c7a52; --good-soft: #d9f0e5; --warn: #93620a; --warn-soft: #f8ebcd; --bad: #b3322c; --bad-soft: #f9dfdd; --na: #9d9ab0;
+  --sans: "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15141d; --surface: #1e1c29; --fg: #ecebf3; --muted: #a5a2b8; --line: #393648; --calc: #272534;
+  --band: #3a3070; --band-fg: #f2f0ff; --accent: #b6aaf0; --accent-soft: #312b57; --field: #181722;
+  --good: #63d0a2; --good-soft: #17392b; --warn: #e6b95a; --warn-soft: #3d3014; --bad: #f0857e; --bad-soft: #451e1c; --na: #77748a;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15141d; --surface: #1e1c29; --fg: #ecebf3; --muted: #a5a2b8; --line: #393648; --calc: #272534;
+  --band: #3a3070; --band-fg: #f2f0ff; --accent: #b6aaf0; --accent-soft: #312b57; --field: #181722;
+  --good: #63d0a2; --good-soft: #17392b; --warn: #e6b95a; --warn-soft: #3d3014; --bad: #f0857e; --bad-soft: #451e1c; --na: #77748a;
+  color-scheme: dark }
+*, *::before, *::after { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; line-height: 1.4; margin: 0; }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 0 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 20px; }
+.wrap > * { min-width: 0; }
+.top { background: var(--surface); border-bottom: 1px solid var(--line); }
+.top-in { max-width: 1320px; margin: 0 auto; padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.brand { font-weight: 700; font-size: 16px; letter-spacing: -.01em; }
+nav { display: flex; gap: 4px; }
+.spacer { flex: 1; }
+.chip { font-size: 12px; color: var(--muted); }
+button { font: inherit; cursor: pointer; }
+.navb, .tabb { background: none; border: 0; padding: 6px 10px; color: var(--muted); border-radius: 4px; font-weight: 600; }
+.navb:hover, .tabb:hover { color: var(--fg); background: var(--accent-soft); }
+.navb.on { color: var(--accent); background: var(--accent-soft); }
+.btn { background: var(--band); color: var(--band-fg); border: 1px solid var(--band); border-radius: 4px; padding: 6px 12px; font-weight: 600; }
+.btn.ghost { background: transparent; color: var(--accent); border-color: var(--line); }
+.btn:hover { filter: brightness(1.12); }
+.link { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; font-size: 12px; }
+.link:hover { color: var(--fg); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+h1 { font-size: 22px; line-height: 1.2; margin: 0; letter-spacing: -.015em; text-wrap: balance; }
+h2 { font-size: 15px; margin: 0; }
+.pagehead { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-top: 20px; }
+.sub { color: var(--muted); }
+.note { color: var(--muted); font-size: 12.5px; margin: 0; max-width: 90ch; }
+.note b { color: var(--fg); font-weight: 600; }
+.section { display: grid; gap: 8px; }
+.section > * { min-width: 0; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.tw { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+thead th { background: var(--band); color: var(--band-fg); font-weight: 600; font-size: 12.5px; line-height: 1.25; border-bottom: 0; vertical-align: bottom; }
+tbody tr:last-child > * { border-bottom: 0; }
+.stick { position: sticky; left: 0; z-index: 1; background: var(--surface); border-right: 1px solid var(--line); min-width: 190px; }
+thead .stick { background: var(--band); border-right-color: var(--band); }
+td.num, th.num { text-align: right; }
+td.calc { background: var(--calc); white-space: nowrap; }
+tr.group td, tr.group th { background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 12px; }
+tr.group .stick { background: var(--accent-soft); }
+tr.total td, tr.total th { font-weight: 700; border-top: 2px solid var(--fg); }
+.none { color: var(--na); }
+input, select, textarea { font: inherit; color: inherit; background: var(--field); border: 1px solid var(--line); border-radius: 3px; padding: 3px 6px; width: 100%; font-variant-numeric: tabular-nums; }
+input:hover, select:hover, textarea:hover { border-color: var(--muted); }
+textarea { display: block; resize: vertical; overflow: hidden; }
+input.r { text-align: right; }
+input.inh { font-style: italic; color: var(--muted); }
+.w-date { min-width: 132px; } .w-money { min-width: 112px; } .w-pct { min-width: 76px; } .w-sel { min-width: 122px; } .w-text { min-width: 130px; } .w-long { min-width: 200px; }
+select[data-v="Yes"], select[data-v="Authorized"], select[data-v="Quoted"], select[data-v="Review FOTs"] { color: var(--good); font-weight: 600; }
+select[data-v="No"], select[data-v="Declined"] { color: var(--bad); font-weight: 600; }
+select[data-v="No Response"], select[data-v="Asked Questions"] { color: var(--warn); font-weight: 600; }
+select[data-v="n/a"] { color: var(--muted); }
+tr.listrow { cursor: pointer; }
+tr.listrow:hover td { background: var(--accent-soft); }
+.plink { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 600; text-align: left; }
+.segs { display: grid; grid-template-columns: repeat(25, 1fr); gap: 2px; width: 100%; min-width: 150px; max-width: 300px; }
+.seg { height: 12px; background: var(--line); }
+.seg.y { background: var(--good); } .seg.n { background: var(--bad); } .seg.a { background: var(--na); }
+.prog { display: flex; align-items: center; gap: 10px; }
+.prog b { white-space: nowrap; min-width: 56px; }
+.key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.key i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; vertical-align: -1px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 12px; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 12px; }
+label.f { display: grid; gap: 3px; font-size: 12px; color: var(--muted); font-weight: 600; }
+label.f > * { font-weight: 400; font-size: 14px; color: var(--fg); }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 28px; align-items: center; }
+.stat { display: grid; gap: 1px; }
+.stat small { color: var(--muted); font-size: 12px; font-weight: 600; }
+.stat strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; border-radius: 3px; padding: 0 7px; font-size: 13px; font-weight: 600; }
+.pill.good { color: var(--good); background: var(--good-soft); } .pill.warn { color: var(--warn); background: var(--warn-soft); } .pill.bad { color: var(--bad); background: var(--bad-soft); } .pill.plain { color: var(--muted); background: var(--calc); font-weight: 500; }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 2px solid var(--line); }
+.tabb { border-radius: 4px 4px 0 0; margin-bottom: -2px; border-bottom: 2px solid transparent; }
+.tabb.on { color: var(--accent); border-bottom-color: var(--accent); background: none; }
+.layername { font-weight: 700; font-size: 15px; max-width: 420px; }
+.declines { display: grid; gap: 3px; }
+.declines div { display: grid; grid-template-columns: minmax(150px, 280px) minmax(0, 1fr); gap: 10px; }
+.emptyc { padding: 24px; text-align: center; color: var(--muted); }
+.fine { white-space: pre-line; }
+@media (max-width: 560px) { .stick { min-width: 150px; } .declines div { grid-template-columns: 1fr; gap: 0; } }
+</style>
+
+<div class="top"><div class="top-in" id="top"></div></div>
+<div class="wrap" id="app"></div>
+
+<script>
+'use strict';
+/* ---- Reference data taken from the workbook ---- */
+const STEPS = [
+  ['Broker of Record Letter Received From Carrier', 1.25],
+  ['Corresponding Broker Appointment, if applicable', 1.25, true],
+  ['Reinsurance Intermediary Authorization Agreement', 5],
+  ['Client Data Requested and Received From Carrier', 2.5],
+  ['Draft Contract Approved (in writing) by Carrier', 5, true],
+  ['Marketing List Disclaimer shown on Marketing List Sent to Carrier', 5],
+  ['Marketing List Approved (in writing) by Carrier', 5],
+  ['Continuing Duty to Disclose Disclaimer in e-mail when sending Submission to Carrier for Approval', 5],
+  ['Submission Approved (in writing) by Carrier', 5],
+  ['Submission Disclaimer shown on Submission Sent to Approved Markets', 5],
+  ['Approved Submission Sent to Approved Markets', 2.5],
+  ['Draft Contracts Sent to Approved Markets', 2.5, true],
+  ['Quotes Received in Writing From Markets', 5],
+  ['Quote Disclaimer shown on Summary of Quotes Sent to Carrier', 5],
+  ['Firm Order Terms Approved (in writing) by Carrier', 5],
+  ['Authorization Disclaimer in e-mail when sending Firm Order Terms to Approved Markets', 5],
+  ['Authorizations Received in Writing From Markets', 5],
+  ['Continuing Duty to Disclose Disclaimer in Summary of Authorizations and Proposed Signed Lines Sent to Carrier', 5],
+  ['Final Signed Lines Approved (in writing) by Carrier', 5],
+  ['Final Signed Lines Sent to Markets', 2.5],
+  ['Final Signed Lines Acknowledge Receipt (in writing) by Markets', 2.5],
+  ['Written Confirmation of Placement Completion Sent to Carrier', 5],
+  ['Final Contract Approved (in writing) by Carrier', 5, true],
+  ['Contract Fully Executed within 90 Days of Effective Date', 2.5],
+  ['Placement Summary (with Fully Executed Contract) Sent to Client', 2.5]
+];
+const CHECK_NOTE = '* Most common disclaimer method.\nAll disclaimer checklist items should include 1 copy of the complete disclaimer language - either in the email (#hashtag method) or included in the document. Please avoid redundancy.\n\nExample with Step #16: If FOTs sent as a screenshot to Markets without complete disclaimer captured in the image, use #FOT. If Broker opts to send FOTs as a PDF with the Authorization Disclaimer included in the PDF, then the email method #FOT is redundant and not needed.';
+const RESPONSE = ['Yes', 'No', 'n/a'];
+const SUB_STATUS = ['Reviewing', 'Asked Questions', 'Declined', 'No Response'];
+const QUOTE_STATUS = ['Quoted', 'Review FOTs', 'Declined'];
+const FOT_STATUS = ['Authorized', 'Reviewing', 'Declined', 'No Response'];
+/* e = expiring, f = firm order, z = final */
+const TERM_ROWS = [
+  ['sbp', 'Subject Base Premium', 'money', 'efz'],
+  ['term', 'Term', 'text', 'efz'],
+  ['limit', 'Limit', 'money', 'efz'],
+  ['retention', 'Retention', 'money', 'efz'],
+  ['rate', 'Premium Rate', 'pct', 'ef'],
+  ['rol', 'Rate on Line', 'pct', 'ez'],
+  ['deposit', 'Deposit Ceded Premium', 'money', 'efz'],
+  ['minimum', 'Minimum Ceded Premium', 'money', 'efz'],
+  ['reinst', 'Reinstatements', 'text', 'efz'],
+  ['exclusions', 'Exclusions', 'long', 'e'],
+  ['conditions', 'Conditions', 'long', 'e'],
+  ['brokerage', 'Brokerage', 'pct', 'efz']
+];
+const QUOTE_ROWS = [
+  ['sbp', 'Subject Base Premium', 'money'], ['term', 'Term', 'text'], ['limit', 'Limit', 'money'], ['retention', 'Retention', 'money'],
+  ['rate', 'Premium Rate', 'pct'], ['deposit', 'Deposit Ceded Premium', 'money'], ['minimum', 'Minimum Ceded Premium', 'money'],
+  ['line', 'Line Size', 'pct'], ['*exp', 'Expiring Line Size', 'pct'], ['reinst', 'Reinstatements', 'text'],
+  ['exclusions', 'Exclusions', 'long'], ['conditions', 'Conditions', 'long'], ['brokerage', 'Brokerage', 'pct']
+];
+
+/* ---- Fictional seed data: every name below is invented ---- */
+function seed() {
+  const R = [
+    ['harrow', 'Harrowmere Reinsurance Company', '00101', '00-0000101', 'Connecticut', 'A+', 'Stable', '2026-05-12', 'A+', 'Stable', '2026-06-03', 4120000, 'Dana Whitlock', 'dana.whitlock@harrowmere.example', '555-0101'],
+    ['calder', 'Calder Point Re Ltd.', 'AA-0000102', '00-0000102', 'Bermuda', 'A', 'Positive', '2026-03-20', 'A', 'Stable', '2026-04-15', 2875000, 'Tomas Reyes', 'treyes@calderpoint.example', '555-0102'],
+    ['fenwick', 'Fenwick Hollow Reinsurance AG', 'AA-0000103', '00-0000103', 'Switzerland', 'AA-', 'Stable', '2026-02-11', 'A+', 'Stable', '2026-02-27', 9340000, 'Alina Brandt', 'a.brandt@fenwickhollow.example', '555-0103'],
+    ['alder', 'Aldermoor Reinsurance SE', 'AA-0000104', '00-0000104', 'Germany', 'A+', 'Stable', '2026-06-18', 'A', 'Positive', '2026-07-09', 6210000, 'Jonas Keller', 'jonas.keller@aldermoor.example', '555-0104'],
+    ['marlowe', 'Marlowe Sound Insurance Company', '00105', '00-0000105', 'New York', 'A-', 'Stable', '2026-04-02', 'A-', 'Stable', '2026-05-21', 1460000, 'Priya Nair', 'pnair@marlowesound.example', '555-0105'],
+    ['quillon', 'Quillon Re Ltd.', 'AA-0000106', '00-0000106', 'Bermuda', 'A-', 'Negative', '2026-08-06', 'A-', 'Stable', '2026-08-28', 1180000, 'Sam Oyelaran', 'sam@quillonre.example', '555-0106']
+  ].map(r => ({ id: r[0], name: r[1], naic: r[2], fein: r[3], domicile: r[4], spRating: r[5], spOutlook: r[6], spDate: r[7], amRating: r[8], amOutlook: r[9], amDate: r[10], surplus: r[11], underwriter: r[12], email: r[13], phone: r[14] }));
+
+  const round = v => Math.round(v / 1000) * 1000;
+  const T = (sbp, limit, retention, rate, more) => {
+    const deposit = round(sbp * rate);
+    return Object.assign({ sbp, term: '12 months', limit, retention, rate, deposit, minimum: round(deposit * .8), reinst: '1 @ 100%', brokerage: .1 }, more || {});
+  };
+  const EXP = (sbp, limit, retention, rate, more) => {
+    const t = T(sbp, limit, retention, rate, more);
+    return Object.assign(t, { rol: t.deposit / limit, exclusions: 'Terrorism; pollution; nuclear', conditions: 'Standard hours clause' });
+  };
+  const Q = (sbp, limit, retention, rate, line, more) => Object.assign(T(sbp, limit, retention, rate, more), { line, exclusions: 'Terrorism; pollution; nuclear', conditions: 'Standard hours clause' });
+  const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const checklist = (answers, dates) => STEPS.map((_, i) => ({ response: answers[i + 1] || '', date: (answers[i + 1] && answers[i + 1] !== 'No') ? dates(i + 1) : '', notes: '' }));
+  const yes = (from, to, over) => { const a = {}; for (let i = from; i <= to; i++) a[i] = 'Yes'; return Object.assign(a, over || {}); };
+
+  /* 1. Just started */
+  const p1 = {
+    id: 'p1', carrier: 'Larkfield Specialty Insurance Company', name: '2027 Casualty Excess of Loss', effective: '2027-04-01', lead: 'Rowan Mercer', support: 'Ines Duarte', comments: '',
+    checklist: checklist(yes(1, 4, { 2: 'n/a' }), n => addDays('2026-10-12', n * 3)),
+    markets: ['harrow', 'alder', 'marlowe'].map(rid => ({ rid })),
+    layers: [
+      { id: 'p1l1', name: 'Layer 1: $5,000,000 xs $5,000,000', expiring: EXP(92000000, 5000000, 5000000, .031), fot: {}, final: {},
+        parts: { harrow: { exp: .4 }, alder: { exp: .35 }, marlowe: { exp: .25 } } },
+      { id: 'p1l2', name: 'Layer 2: $10,000,000 xs $10,000,000', expiring: EXP(92000000, 10000000, 10000000, .019), fot: {}, final: {},
+        parts: { harrow: { exp: .5 }, alder: { exp: .5 }, marlowe: {} } }
+    ]
+  };
+  p1.checklist[3].notes = 'Data request sent with last year\'s exhibit list.';
+
+  /* 2. Out to market, with a missed disclaimer on step 10 */
+  const sbp2 = 186000000;
+  const sub2 = '2026-10-18', dr2 = '2026-10-22';
+  const p2 = {
+    id: 'p2', carrier: 'Bluepine Mutual Insurance Company', name: '2027 Property Catastrophe Excess of Loss', effective: '2027-01-01', lead: 'Ines Duarte', support: 'Rowan Mercer, Theo Lindqvist', comments: '',
+    checklist: checklist(yes(1, 12, { 2: 'n/a', 10: 'No' }), n => addDays('2026-09-08', (n - 1) * 4)),
+    markets: [
+      { rid: 'harrow', subDate: sub2, draftDate: dr2, receiptDate: '2026-10-19', subStatus: 'Reviewing' },
+      { rid: 'calder', subDate: sub2, draftDate: dr2, receiptDate: '2026-10-19', subStatus: 'Reviewing' },
+      { rid: 'fenwick', subDate: sub2, draftDate: dr2, receiptDate: '2026-10-20', subStatus: 'Reviewing' },
+      { rid: 'alder', subDate: sub2, draftDate: dr2, receiptDate: '2026-10-21', chasedDate: '2026-10-28', subStatus: 'Asked Questions', notes: 'Wants the updated wind model before quoting.' },
+      { rid: 'marlowe', subDate: sub2, draftDate: dr2, chasedDate: '2026-10-29', subStatus: 'No Response', notes: 'Second chase sent.' }
+    ],
+    layers: [
+      { id: 'p2l1', name: 'Layer 1: $25,000,000 xs $25,000,000', expiring: EXP(171000000, 25000000, 25000000, .0245), fot: {}, final: {},
+        parts: {
+          harrow: { qs: 'Quoted', quote: Q(sbp2, 25000000, 25000000, .0252, .25), exp: .25 },
+          calder: { qs: 'Quoted', quote: Q(sbp2, 25000000, 25000000, .0261, .15, { reinst: '1 @ 125%' }), exp: .2 },
+          fenwick: { qs: 'Declined', reason: 'Aggregate wind exposure in the region is above current appetite.', exp: .15 },
+          alder: { exp: .25 }, marlowe: { exp: .15 }
+        } },
+      { id: 'p2l2', name: 'Layer 2: $50,000,000 xs $50,000,000', expiring: EXP(171000000, 50000000, 50000000, .0158), fot: {}, final: {},
+        parts: {
+          harrow: { qs: 'Quoted', quote: Q(sbp2, 50000000, 50000000, .0163, .2), exp: .2 },
+          calder: { exp: .25 },
+          fenwick: { qs: 'Quoted', quote: Q(sbp2, 50000000, 50000000, .0171, .3), exp: .3 },
+          alder: { exp: .25 }, marlowe: {}
+        } },
+      { id: 'p2l3', name: 'Layer 3: $75,000,000 xs $100,000,000', expiring: EXP(171000000, 75000000, 100000000, .0104), fot: {}, final: {},
+        parts: {
+          harrow: {}, calder: { qs: 'Quoted', quote: Q(sbp2, 75000000, 100000000, .0109, .2), exp: .3 },
+          fenwick: { qs: 'Declined', reason: 'Attachment point is below the minimum for this peril.', exp: .4 },
+          alder: { exp: .3 }, marlowe: {}
+        } }
+    ]
+  };
+  p2.checklist[9].notes = 'Disclaimer left off the version sent to markets. Resend needed.';
+
+  /* 3. Collecting authorizations */
+  const sbp3 = 124000000, sub3 = '2026-10-04', dr3 = '2026-10-09', fot3 = '2026-10-29';
+  const p3 = {
+    id: 'p3', carrier: 'Wexcombe Home Assurance Company', name: '2027 Property Per Risk Excess of Loss', effective: '2027-01-01', lead: 'Theo Lindqvist', support: 'Ines Duarte', comments: '',
+    checklist: checklist(yes(1, 16), n => addDays('2026-08-15', (n - 1) * 5)),
+    markets: [
+      { rid: 'harrow', subDate: sub3, draftDate: dr3, receiptDate: '2026-10-05', subStatus: 'Reviewing' },
+      { rid: 'calder', subDate: sub3, draftDate: dr3, receiptDate: '2026-10-05', subStatus: 'Reviewing' },
+      { rid: 'alder', subDate: sub3, draftDate: dr3, receiptDate: '2026-10-06', chasedDate: '2026-10-12', subStatus: 'Reviewing' },
+      { rid: 'marlowe', subDate: sub3, draftDate: dr3, receiptDate: '2026-10-07', subStatus: 'Declined' },
+      { rid: 'quillon', subDate: sub3, draftDate: dr3, receiptDate: '2026-10-07', subStatus: 'Reviewing' }
+    ],
+    layers: [
+      { id: 'p3l1', name: 'Layer 1: $10,000,000 xs $5,000,000', expiring: EXP(117000000, 10000000, 5000000, .0335), fot: T(sbp3, 10000000, 5000000, .0342), final: {},
+        parts: {
+          harrow: { qs: 'Review FOTs', quote: Q(sbp3, 10000000, 5000000, .0342, .35), fotDate: fot3, fotStatus: 'Authorized', exp: .35, auth: .35, prop: .3 },
+          calder: { qs: 'Review FOTs', quote: Q(sbp3, 10000000, 5000000, .035, .25), fotDate: fot3, fotStatus: 'Authorized', exp: .2, auth: .3, prop: .25 },
+          alder: { qs: 'Review FOTs', quote: Q(sbp3, 10000000, 5000000, .0338, .3), fotDate: fot3, fotStatus: 'Reviewing', exp: .3 },
+          marlowe: { qs: 'Declined', reason: 'No appetite for habitational risks at this attachment.', exp: .15 },
+          quillon: { qs: 'Review FOTs', quote: Q(sbp3, 10000000, 5000000, .0347, .15), fotDate: fot3, fotStatus: 'No Response' }
+        } },
+      { id: 'p3l2', name: 'Layer 2: $20,000,000 xs $15,000,000', expiring: EXP(117000000, 20000000, 15000000, .0172), fot: T(sbp3, 20000000, 15000000, .0178), final: {},
+        parts: {
+          harrow: { qs: 'Review FOTs', quote: Q(sbp3, 20000000, 15000000, .0178, .3), fotDate: fot3, fotStatus: 'Authorized', exp: .3, auth: .3, prop: .3 },
+          calder: { qs: 'Review FOTs', quote: Q(sbp3, 20000000, 15000000, .0182, .2), fotDate: fot3, fotStatus: 'Reviewing', exp: .25 },
+          alder: { qs: 'Review FOTs', quote: Q(sbp3, 20000000, 15000000, .0176, .35), fotDate: fot3, fotStatus: 'Authorized', exp: .3, auth: .4, prop: .35 },
+          marlowe: { qs: 'Declined', reason: 'No appetite for habitational risks at this attachment.', exp: .15 },
+          quillon: {}
+        } }
+    ]
+  };
+
+  /* 4. Bound */
+  const sbp4 = 148000000, sub4 = '2026-03-11', dr4 = '2026-03-17', fot4 = '2026-05-10';
+  const dates4 = n => n <= 22 ? addDays('2026-02-09', (n - 1) * 6) : { 23: '2026-07-20', 24: '2026-08-28', 25: '2026-09-08' }[n];
+  const bound = (exp, line, quote) => ({ qs: 'Review FOTs', quote, fotDate: fot4, fotStatus: 'Authorized', exp, auth: line, prop: line, fin: line });
+  const ids4 = ['harrow', 'calder', 'fenwick', 'alder', 'marlowe', 'quillon'];
+  const parts4 = (limit, retention, rates, exp, lines) => {
+    const o = {};
+    ids4.forEach((id, i) => { o[id] = bound(exp[i], lines[i], Q(sbp4, limit, retention, rates[i], lines[i])); });
+    return o;
+  };
+  const p4 = {
+    id: 'p4', carrier: 'Ironmere Casualty Group', name: '2026 Property Catastrophe Excess of Loss', effective: '2026-07-01', lead: 'Rowan Mercer', support: 'Theo Lindqvist', comments: 'Placed in full. Contract executed 58 days after the effective date.',
+    checklist: checklist(yes(1, 25, { 2: 'n/a' }), dates4),
+    markets: ids4.map((rid, i) => ({ rid, subDate: sub4, draftDate: dr4, receiptDate: addDays(sub4, 1 + i % 3), chasedDate: i === 4 ? '2026-03-24' : '', subStatus: 'Reviewing' })),
+    layers: [
+      { id: 'p4l1', name: 'Layer 1: $20,000,000 xs $20,000,000', expiring: EXP(139000000, 20000000, 20000000, .0268), fot: T(sbp4, 20000000, 20000000, .0274), final: { rol: .2028 },
+        parts: parts4(20000000, 20000000, [.0274, .0281, .0279, .0274, .0286, .029], [.25, .15, .2, .2, .1, .1], [.25, .2, .2, .15, .1, .1]) },
+      { id: 'p4l2', name: 'Layer 2: $40,000,000 xs $40,000,000', expiring: EXP(139000000, 40000000, 40000000, .0172), fot: T(sbp4, 40000000, 40000000, .0177), final: { rol: .0655 },
+        parts: parts4(40000000, 40000000, [.0177, .0181, .018, .0177, .0186, .0188], [.2, .2, .25, .2, .1, .05], [.2, .2, .25, .2, .05, .1]) },
+      { id: 'p4l3', name: 'Layer 3: $60,000,000 xs $80,000,000', expiring: EXP(139000000, 60000000, 80000000, .0111), fot: T(sbp4, 60000000, 80000000, .0114), final: { rol: .0278, deposit: 1665000, minimum: 1332000 },
+        parts: parts4(60000000, 80000000, [.0114, .0118, .0116, .0114, .0121, .0123], [.15, .25, .3, .2, .05, .05], [.15, .25, .3, .2, .05, .05]) }
+    ]
+  };
+  return { reinsurers: R, placements: [p1, p2, p3, p4] };
+}
+
+/* ---- Storage: browser only ---- */
+const KEY = 'placement-tracker-v1';
+function load() { try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s); } catch (e) {} return seed(); }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+let S = load();
+
+/* ---- Workbook logic ---- */
+const potential = (c, i) => (STEPS[i][2] && c.response === 'n/a') ? 0 : STEPS[i][1];
+const awarded = (c, i) => c.response === 'Yes' ? potential(c, i) : 0;
+const totalAwarded = p => p.checklist.reduce((a, c, i) => a + awarded(c, i), 0);
+const totalPotential = p => p.checklist.reduce((a, c, i) => a + potential(c, i), 0);
+const auditScore = p => totalAwarded(p) / totalPotential(p);
+const risk = s => s >= .925 ? 'Low' : s >= .85 ? 'Moderate' : 'High';
+const stepsDone = p => p.checklist.filter(c => c.response === 'Yes' || c.response === 'n/a').length;
+const sendFots = qs => (qs === 'Quoted' || qs === 'Review FOTs') ? 'Yes' : qs === 'Declined' ? 'No' : '';
+const finalValue = (l, k) => (l.final[k] !== undefined && l.final[k] !== '') ? l.final[k] : l.fot[k];
+
+/* ---- Formatting ---- */
+const esc = s => String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const empty = v => v === undefined || v === null || v === '';
+const fmtMoney = v => empty(v) ? '' : '$' + Math.round(v).toLocaleString('en-US');
+const fmtPct = v => empty(v) ? '' : (Math.round(v * 1e6) / 1e4).toString() + '%';
+const fmtDate = d => { if (!d) return ''; const [y, m, a] = d.split('-'); return m + '.' + a + '.' + y; };
+const fmt = (v, t) => t === 'money' ? fmtMoney(v) : t === 'pct' ? fmtPct(v) : (empty(v) ? '' : String(v));
+function parse(raw, t) {
+  const s = String(raw).trim();
+  if (t === 'money') { if (!s) return ''; const n = Number(s.replace(/[$,\s]/g, '')); return isNaN(n) ? undefined : n; }
+  if (t === 'pct') { if (!s) return ''; const n = Number(s.replace(/[%\s]/g, '')); return isNaN(n) ? undefined : Math.round(n * 1e4) / 1e6; }
+  return raw;
+}
+const yy = p => (p.effective || '').slice(2, 4) || 'YY';
+const py = p => { const y = parseInt((p.effective || '').slice(0, 4), 10); return y ? String(y - 1).slice(2) : 'YY'; };
+
+/* ---- Render plumbing: controls bind directly to the record they edit ---- */
+let binds = [], calcs = [], acts = [], route = { view: 'placements' };
+const ctlId = () => 'c' + binds.length;
+function reset() { binds = []; calcs = []; acts = []; }
+function bindAttrs(o, k, t, opts) {
+  binds.push({ o, k, t, opts: opts || {} });
+  return 'id="' + ctlId() + '" data-b="' + (binds.length - 1) + '"';
+}
+function inp(o, k, t, opts) {
+  opts = opts || {};
+  const label = opts.label ? ' aria-label="' + esc(opts.label) + '"' : '';
+  const a = bindAttrs(o, k, t, opts);
+  if (t === 'date') return '<input class="w-date" type="date" ' + a + label + ' value="' + esc(o[k]) + '">';
+  if (t === 'long') return '<textarea class="w-long" rows="1" ' + a + label + '>' + esc(o[k]) + '</textarea>';
+  if (t === 'money' || t === 'pct') {
+    const fb = opts.fallback ? opts.fallback() : undefined;
+    const showing = empty(o[k]) && !empty(fb) ? fb : o[k];
+    const cls = (t === 'money' ? 'w-money' : 'w-pct') + ' r' + (empty(o[k]) && !empty(fb) ? ' inh' : '');
+    return '<input class="' + cls + '" inputmode="decimal" ' + a + label + ' value="' + esc(fmt(showing, t)) + '"' + (opts.fallback ? ' title="Starts from Firm Order Terms. Type to change it, clear to go back."' : '') + '>';
+  }
+  const fb = opts.fallback ? opts.fallback() : undefined;
+  const inh = empty(o[k]) && !empty(fb);
+  return '<input class="' + (opts.cls || 'w-text') + (inh ? ' inh' : '') + '" ' + a + label + ' value="' + esc(inh ? fb : o[k]) + '"' + (opts.fallback ? ' title="Starts from Firm Order Terms. Type to change it, clear to go back."' : '') + '>';
+}
+function sel(o, k, options, opts) {
+  opts = opts || {};
+  const a = bindAttrs(o, k, 'select', opts);
+  const cur = o[k] || '';
+  return '<select class="w-sel" ' + a + (opts.label ? ' aria-label="' + esc(opts.label) + '"' : '') + ' data-v="' + esc(cur) + '"><option value=""></option>' + options.map(v => '<option' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>').join('') + '</select>';
+}
+function calc(fn) { calcs.push(fn); return '<span data-c="' + (calcs.length - 1) + '">' + fn() + '</span>'; }
+function act(fn) { acts.push(fn); return 'data-a="' + (acts.length - 1) + '"'; }
+function refresh() {
+  document.querySelectorAll('[data-c]').forEach(el => { el.innerHTML = calcs[+el.dataset.c](); });
+  /* Final Terms that still follow Firm Order Terms */
+  document.querySelectorAll('[data-b]').forEach(el => {
+    const b = binds[+el.dataset.b];
+    if (!b.opts.fallback || !empty(b.o[b.k])) return;
+    const fb = b.opts.fallback();
+    el.value = fmt(fb, b.t);
+    el.classList.toggle('inh', !empty(fb));
+  });
+}
+function sizeAreas() { document.querySelectorAll('textarea').forEach(t => { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }); }
+
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (!el.dataset || el.dataset.b === undefined) return;
+  const b = binds[+el.dataset.b];
+  const v = parse(el.value, b.t);
+  if (v === undefined) { el.value = fmt(b.o[b.k], b.t); return; }
+  b.o[b.k] = v;
+  if (b.t === 'money' || b.t === 'pct') el.value = fmt(v, b.t);
+  if (b.opts.fallback) el.classList.remove('inh');
+  if (el.tagName === 'SELECT') el.dataset.v = v;
+  save();
+  if (b.opts.rerender) render(); else refresh();
+});
+document.addEventListener('input', e => { if (e.target.tagName === 'TEXTAREA') { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight + 2) + 'px'; } });
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-a]');
+  if (t) acts[+t.dataset.a](e);
+});
+
+/* ---- Shared pieces ---- */
+function go(r) { route = r; try { location.hash = r.view === 'placement' ? r.id + '.' + r.tab : r.view; } catch (e) {} render(); window.scrollTo(0, 0); }
+function parseHash() {
+  const h = (location.hash || '').slice(1);
+  if (h === 'reinsurers') return { view: 'reinsurers' };
+  const [id, tab] = h.split('.');
+  if (S.placements.some(p => p.id === id)) return { view: 'placement', id, tab: TABS.some(t => t[0] === tab) ? tab : 'checklist' };
+  return { view: 'placements' };
+}
+window.addEventListener('hashchange', () => { const r = parseHash(); if (JSON.stringify(r) !== JSON.stringify(route)) { route = r; render(); } });
+const reinsurer = id => S.reinsurers.find(r => r.id === id) || {};
+function segs(p) {
+  return '<div class="segs" role="img" aria-label="' + stepsDone(p) + ' of 25 steps done">' + p.checklist.map(c => '<span class="seg ' + (c.response === 'Yes' ? 'y' : c.response === 'No' ? 'n' : c.response === 'n/a' ? 'a' : '') + '"></span>').join('') + '</div>';
+}
+function byDomicile(list, domOf) {
+  const groups = {};
+  list.forEach(x => { const d = domOf(x) || 'No domicile entered'; (groups[d] = groups[d] || []).push(x); });
+  return Object.keys(groups).sort().map(d => [d, groups[d]]);
+}
+const riskPill = s => { const r = risk(s); return '<span class="pill ' + (r === 'Low' ? 'good' : r === 'Moderate' ? 'warn' : 'bad') + '">' + r + '</span>'; };
+const sum = (arr, f) => arr.reduce((a, x) => a + (Number(f(x)) || 0), 0);
+const dash = '<span class="none">–</span>';
+
+/* ---- Header ---- */
+let confirmingReset = false;
+function renderTop() {
+  const on = v => (route.view === v || (v === 'placements' && route.view === 'placement')) ? ' on' : '';
+  let reset_;
+  if (confirmingReset) {
+    reset_ = '<span class="chip">Erase your edits and reload the demo data?</span> <button class="link" ' + act(() => { S = seed(); save(); confirmingReset = false; go({ view: 'placements' }); }) + '>Reset</button> <button class="link" ' + act(() => { confirmingReset = false; render(); }) + '>Keep</button>';
+  } else {
+    reset_ = '<span class="chip">Fictional data</span> <button class="link" ' + act(() => { confirmingReset = true; render(); }) + '>Reset demo data</button>';
+  }
+  document.getElementById('top').innerHTML = '<span class="brand">Placement Tracker</span><nav>' +
+    '<button class="navb' + on('placements') + '" ' + act(() => go({ view: 'placements' })) + '>Placements</button>' +
+    '<button class="navb' + on('reinsurers') + '" ' + act(() => go({ view: 'reinsurers' })) + '>Reinsurers</button></nav><span class="spacer"></span><span class="row">' + reset_ + '</span>';
+}
+
+/* ---- Req 7 + Req 1: all placements ---- */
+let draft = null;
+function viewPlacements() {
+  const rows = S.placements.map(p => '<tr class="listrow" ' + act(() => go({ view: 'placement', id: p.id, tab: 'checklist' })) + '>' +
+    '<td><button class="plink">' + esc(p.name || 'Untitled placement') + '</button></td><td>' + esc(p.carrier) + '</td><td>' + esc(fmtDate(p.effective)) + '</td>' +
+    '<td><div class="prog"><b>' + stepsDone(p) + ' of 25</b>' + segs(p) + '</div></td></tr>').join('');
+  let form = '';
+  if (draft) {
+    form = '<form class="card section" id="newform"><h2>New placement</h2><div class="fields">' +
+      '<label class="f">Carrier Name' + inp(draft, 'carrier', 'text') + '</label><label class="f">Placement' + inp(draft, 'name', 'text') + '</label>' +
+      '<label class="f">Effective Date' + inp(draft, 'effective', 'date') + '</label><label class="f">Lead Broker' + inp(draft, 'lead', 'text') + '</label>' +
+      '<label class="f">Support Broker(s)' + inp(draft, 'support', 'text') + '</label></div>' +
+      '<div class="row"><button type="submit" class="btn">Create placement</button><button type="button" class="btn ghost" ' + act(() => { draft = null; render(); }) + '>Cancel</button></div></form>';
+  }
+  return '<div class="pagehead"><h1>Placements</h1><span class="spacer"></span>' + (draft ? '' : '<button class="btn" ' + act(() => { draft = { carrier: '', name: '', effective: '', lead: '', support: '' }; render(); }) + '>New placement</button>') + '</div>' + form +
+    '<div class="section"><div class="tw"><table><thead><tr><th>Placement</th><th>Carrier Name</th><th>Effective Date</th><th>Checklist progress</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="key"><span><i style="background:var(--good)"></i>Yes</span><span><i style="background:var(--na)"></i>n/a</span><span><i style="background:var(--bad)"></i>No (not counted as done)</span><span><i style="background:var(--line)"></i>Not answered</span></div></div>';
+}
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  if (e.target.id !== 'newform') return;
+  document.activeElement && document.activeElement.blur();
+  const d = draft;
+  const p = { id: 'p' + Date.now(), carrier: d.carrier, name: d.name, effective: d.effective, lead: d.lead, support: d.support, comments: '', checklist: STEPS.map(() => ({ response: '', date: '', notes: '' })), markets: [], layers: [] };
+  S.placements.push(p); save(); draft = null;
+  go({ view: 'placement', id: p.id, tab: 'layers' });
+});
+
+/* ---- Placement shell ---- */
+const TABS = [['layers', 'Layers & Terms'], ['tracker', 'Market Tracker'], ['quotes', 'Quote Summary'], ['checklist', 'Placement Checklist']];
+function viewPlacement() {
+  const p = S.placements.find(x => x.id === route.id);
+  if (!p) { route = { view: 'placements' }; return viewPlacements(); }
+  const body = route.tab === 'layers' ? tabLayers(p) : route.tab === 'tracker' ? tabTracker(p) : route.tab === 'quotes' ? tabQuotes(p) : tabChecklist(p);
+  return '<div class="pagehead"><h1>' + esc(p.name || 'Untitled placement') + '</h1></div>' +
+    '<div class="card section"><div class="fields">' +
+    '<label class="f">Carrier Name' + inp(p, 'carrier', 'text') + '</label><label class="f">Placement' + inp(p, 'name', 'text', { rerender: true }) + '</label>' +
+    '<label class="f">Effective Date' + inp(p, 'effective', 'date', { rerender: true }) + '</label><label class="f">Lead Broker' + inp(p, 'lead', 'text') + '</label>' +
+    '<label class="f">Support Broker(s)' + inp(p, 'support', 'text') + '</label></div>' +
+    '<div class="stats"><div class="stat"><small>Checklist progress</small><strong>' + calc(() => stepsDone(p) + ' of 25') + '</strong></div>' +
+    '<div class="stat" style="flex:1;min-width:160px;max-width:320px">' + calc(() => segs(p)) + '</div>' +
+    '<div class="stat"><small>Audit Score</small><strong>' + calc(() => (auditScore(p) * 100).toFixed(2) + '%') + '</strong></div>' +
+    '<div class="stat"><small>Risk Assessment</small><strong>' + calc(() => riskPill(auditScore(p))) + '</strong></div></div></div>' +
+    '<div class="tabs" role="tablist">' + TABS.map(t => '<button role="tab" aria-selected="' + (route.tab === t[0]) + '" class="tabb' + (route.tab === t[0] ? ' on' : '') + '" ' + act(() => go({ view: 'placement', id: p.id, tab: t[0] })) + '>' + t[1] + '</button>').join('') + '</div>' + body;
+}
+
+/* ---- Req 2: layers and terms ---- */
+function tabLayers(p) {
+  const add = '<div><button class="btn ghost" ' + act(() => {
+    const l = { id: 'l' + Date.now(), name: 'Layer ' + (p.layers.length + 1), expiring: {}, fot: {}, final: {}, parts: {} };
+    p.markets.forEach(m => { l.parts[m.rid] = {}; });
+    p.layers.push(l); save(); render();
+  }) + '>Add layer</button></div>';
+  if (!p.layers.length) return '<div class="card emptyc">No layers yet. Add the first layer to enter its terms.<br><br>' + add + '</div>';
+  return p.layers.map(l => {
+    const rows = TERM_ROWS.map(r => {
+      const [k, label, t, st] = r;
+      const cell = (obj, stage, opts) => st.includes(stage) ? '<td>' + inp(obj, k, t, Object.assign({ label: label }, opts || {})) + '</td>' : '<td>' + dash + '</td>';
+      const follow = st.includes('f') && st.includes('z') ? { fallback: () => l.fot[k] } : {};
+      return '<tr><th class="stick" scope="row">' + label + '</th>' + cell(l.expiring, 'e') + cell(l.fot, 'f') + cell(l.final, 'z', follow) + '</tr>';
+    }).join('');
+    return '<div class="section"><input class="layername" aria-label="Layer" ' + bindAttrs(l, 'name', 'text') + ' value="' + esc(l.name) + '">' +
+      '<div class="tw"><table><thead><tr><th class="stick">Terms</th><th>' + py(p) + ' Expiring Final Terms</th><th>' + yy(p) + ' Firm Order Terms</th><th>' + yy(p) + ' Final Terms</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+  }).join('') +
+  '<p class="note">Final Terms in italics are following Firm Order Terms until you type over them. <b>For Matt:</b> the workbook says Premium Rate on Firm Order Terms and Rate on Line on Final Terms, so both are kept as separate fields. Is that intended?</p>' + add;
+}
+
+/* ---- Req 4: market tracker ---- */
+function tabTracker(p) {
+  const onPlacement = p.markets.map(m => m.rid);
+  const avail = S.reinsurers.filter(r => !onPlacement.includes(r.id));
+  const picker = { v: '' };
+  const addBar = avail.length ? '<div class="row"><div style="width:280px;max-width:100%">' + sel(picker, 'v', avail.map(r => r.name), { label: 'Reinsurer to add' }) + '</div><button class="btn ghost" ' + act(() => {
+    const r = avail.find(x => x.name === picker.v); if (!r) return;
+    p.markets.push({ rid: r.id }); p.layers.forEach(l => { l.parts[r.id] = l.parts[r.id] || {}; }); save(); render();
+  }) + '>Add to all layers</button></div>' : '';
+  if (!p.markets.length) return '<div class="card emptyc">No reinsurers on this placement yet. Add one from the shared list.</div>' + addBar;
+
+  const outreachRows = byDomicile(p.markets, m => reinsurer(m.rid).domicile).map(([d, ms]) =>
+    '<tr class="group"><td class="stick">' + esc(d) + '</td><td colspan="9"></td></tr>' + ms.map(m => {
+      const r = reinsurer(m.rid);
+      return '<tr><th class="stick" scope="row">' + esc(r.name) + '</th><td class="calc">' + esc(r.underwriter) + '</td><td class="calc">' + esc(r.email) + '</td><td class="calc">' + esc(r.phone) + '</td>' +
+        '<td>' + inp(m, 'subDate', 'date', { label: 'Sent: Submission Date' }) + '</td><td>' + inp(m, 'draftDate', 'date', { label: 'Sent: Draft Contract Date' }) + '</td><td>' + inp(m, 'receiptDate', 'date', { label: 'Confirmed Receipt Date' }) + '</td><td>' + inp(m, 'chasedDate', 'date', { label: 'Chased Date' }) + '</td>' +
+        '<td>' + sel(m, 'subStatus', SUB_STATUS, { label: 'Submission Status' }) + '</td><td>' + inp(m, 'notes', 'long', { label: 'Additional Notes' }) + '</td></tr>';
+    }).join('')).join('');
+
+  const layerTables = p.layers.map(l => {
+    const entries = p.markets.filter(m => l.parts[m.rid]);
+    const missing = p.markets.filter(m => !l.parts[m.rid]);
+    const lim = () => l.fot.limit;
+    const flim = () => finalValue(l, 'limit');
+    const elim = () => l.expiring.limit;
+    const pct$ = (v, base) => (empty(v) || empty(base)) ? dash : fmtMoney(v * base);
+    const parts = entries.map(m => l.parts[m.rid]);
+    const body = byDomicile(entries, m => reinsurer(m.rid).domicile).map(([d, ms]) =>
+      '<tr class="group"><td class="stick">' + esc(d) + '</td><td colspan="12"></td></tr>' + ms.map(m => {
+        const part = l.parts[m.rid], r = reinsurer(m.rid);
+        return '<tr><th class="stick" scope="row">' + esc(r.name) + '</th>' +
+          '<td>' + sel(part, 'qs', QUOTE_STATUS, { label: 'Quote Status' }) + '</td><td>' + inp(part, 'reason', 'long', { label: 'Reason for Declination' }) + '</td>' +
+          '<td class="calc">' + calc(() => sendFots(part.qs) || dash) + '</td>' +
+          '<td>' + inp(part, 'fotDate', 'date', { label: "Sent: FOTs Date" }) + '</td><td>' + sel(part, 'fotStatus', FOT_STATUS, { label: 'FOTs Status' }) + '</td>' +
+          '<td>' + inp(part, 'exp', 'pct', { label: 'Expiring Final Line %' }) + '</td><td class="calc num">' + calc(() => pct$(part.exp, elim())) + '</td>' +
+          '<td>' + inp(part, 'auth', 'pct', { label: 'Authorization' }) + '</td><td>' + inp(part, 'prop', 'pct', { label: 'Proposed Final Line %' }) + '</td><td class="calc num">' + calc(() => pct$(part.prop, lim())) + '</td>' +
+          '<td>' + inp(part, 'fin', 'pct', { label: 'Final Line %' }) + '</td><td class="calc num">' + calc(() => pct$(part.fin, flim())) + '</td></tr>';
+      }).join('')).join('');
+    const tot = f => calc(() => fmtPct(sum(parts, f)));
+    const tot$ = (f, base) => calc(() => empty(base()) ? dash : fmtMoney(sum(parts, f) * base()));
+    const add = missing.length ? '<div class="row">' + missing.map(m => '<button class="btn ghost" ' + act(() => { l.parts[m.rid] = {}; save(); render(); }) + '>Add ' + esc(reinsurer(m.rid).name) + ' to this layer</button>').join('') + '</div>' : '';
+    return '<div class="section"><h2>' + esc(l.name) + '</h2><div class="tw"><table><thead><tr><th class="stick">Reinsurer</th><th>Quote Status</th><th>Reason for Declination</th><th>Send FOT\'s?</th><th>Sent: FOTs Date</th><th>FOTs Status</th>' +
+      '<th>' + py(p) + ' Expiring Final Line %</th><th class="num">' + py(p) + ' Final Line $</th><th>' + yy(p) + ' Authorization</th><th>' + yy(p) + ' Proposed Final Line %</th><th class="num">' + yy(p) + ' Proposed Final $ Limit</th><th>' + yy(p) + ' Final Line %</th><th class="num">' + yy(p) + ' Final Line $</th></tr></thead><tbody>' + body +
+      '<tr class="total"><th class="stick" scope="row">Totals:</th><td colspan="5"></td><td class="num">' + tot(x => x.exp) + '</td><td class="num">' + tot$(x => x.exp, elim) + '</td><td class="num">' + tot(x => x.auth) + '</td><td class="num">' + tot(x => x.prop) + '</td><td class="num">' + tot$(x => x.prop, lim) + '</td><td class="num">' + tot(x => x.fin) + '</td><td class="num">' + tot$(x => x.fin, flim) + '</td></tr></tbody></table></div>' + add + '</div>';
+  }).join('');
+
+  return '<div class="section"><h2>Submission and chasing</h2><p class="note">One row per reinsurer, as in the workbook, so a date is typed once however many layers it covers. Contact details come from the reinsurer list.</p>' +
+    '<div class="tw"><table><thead><tr><th class="stick">Reinsurer</th><th>Underwriter</th><th>Email</th><th>Phone Number</th><th>Sent: Submission Date</th><th>Sent: Draft Contract Date</th><th>Confirmed Receipt Date</th><th>Chased Date</th><th>Submission Status</th><th>Additional Notes</th></tr></thead><tbody>' + outreachRows + '</tbody></table></div>' + addBar + '</div>' +
+    (p.layers.length ? layerTables : '<div class="card emptyc">Add a layer on Layers &amp; Terms to track quotes and lines.</div>') +
+    '<p class="note">Shaded cells calculate: Line $ = Line % × that year\'s Limit. Proposed uses the Firm Order Terms Limit and Final uses the Final Terms Limit. <b>For Matt:</b> Final Signed Lines has two identical pairs of Final Line % and $ columns. They are treated here as expiring year and current year.</p>';
+}
+
+/* ---- Req 5: quotes side by side ---- */
+function tabQuotes(p) {
+  if (!p.layers.length) return '<div class="card emptyc">Add a layer on Layers &amp; Terms to compare quotes.</div>';
+  return p.layers.map(l => {
+    const entries = p.markets.filter(m => l.parts[m.rid]);
+    const active = entries.filter(m => l.parts[m.rid].qs !== 'Declined');
+    const declined = entries.filter(m => l.parts[m.rid].qs === 'Declined');
+    const head = active.map(m => { const part = l.parts[m.rid]; return '<th>' + esc(reinsurer(m.rid).name) + '<br>' + (part.qs ? '<span style="font-weight:400">' + esc(part.qs) + '</span>' : '<span style="font-weight:400;opacity:.8">No quote yet</span>') + '</th>'; }).join('');
+    const rows = QUOTE_ROWS.map(([k, label, t]) => {
+      const exp = k === '*exp' || k === 'line' ? dash : (empty(l.expiring[k]) ? dash : esc(fmt(l.expiring[k], t)));
+      const cells = active.map(m => {
+        const part = l.parts[m.rid];
+        if (k === '*exp') return '<td>' + inp(part, 'exp', 'pct', { label: label }) + '</td>';
+        part.quote = part.quote || {};
+        return '<td>' + inp(part.quote, k, t, { label: label }) + '</td>';
+      }).join('');
+      return '<tr><th class="stick" scope="row">' + label + '</th><td class="calc' + (t === 'money' || t === 'pct' ? ' num' : '') + '" style="white-space:normal">' + exp + '</td>' + cells + '</tr>';
+    }).join('');
+    const info = [['A. M. Best Rating', r => r.amRating], ['S&P Rating', r => r.spRating], ['NAIC / AIIN', r => r.naic], ['FEIN', r => r.fein]].map(([label, f]) =>
+      '<tr><th class="stick" scope="row">' + esc(label) + '</th><td></td>' + active.map(m => '<td class="calc">' + esc(f(reinsurer(m.rid))) + '</td>').join('') + '</tr>').join('');
+    const dec = declined.length ? '<div class="section"><h2 style="font-size:13px">Declinations</h2><div class="declines">' + declined.map(m => '<div><span>' + esc(reinsurer(m.rid).name) + '</span><span class="sub">' + esc(l.parts[m.rid].reason || 'No reason entered') + '</span></div>').join('') + '</div></div>' : '';
+    const table = active.length ? '<div class="tw"><table><thead><tr><th class="stick">Terms</th><th>' + py(p) + ' Expiring</th>' + head + '</tr></thead><tbody>' + rows +
+      '<tr class="group"><td class="stick">Market Information</td><td colspan="' + (active.length + 1) + '"></td></tr>' + info + '</tbody></table></div>' : '<div class="card emptyc">No active markets on this layer.</div>';
+    return '<div class="section"><h2>' + esc(l.name) + '</h2>' + table + dec + '</div>';
+  }).join('') + '<p class="note"><b>For Matt:</b> each market holds one set of terms per layer, and a re-quote overwrites it. Do quotes go through rounds that need keeping?</p>';
+}
+
+/* ---- Req 6: checklist ---- */
+function tabChecklist(p) {
+  const rows = p.checklist.map((c, i) =>
+    '<tr><td class="num">' + (i + 1) + '</td><td style="min-width:300px">' + esc(STEPS[i][0]) + '</td><td>' + sel(c, 'response', RESPONSE, { label: 'Response, step ' + (i + 1) }) + '</td>' +
+    '<td>' + inp(c, 'date', 'date', { label: 'Date, step ' + (i + 1) }) + '</td><td>' + inp(c, 'notes', 'long', { label: 'Broker Notes, step ' + (i + 1) }) + '</td>' +
+    '<td class="calc num">' + calc(() => String(awarded(c, i))) + '</td><td class="calc num">' + calc(() => String(potential(c, i))) + '</td></tr>').join('');
+  return '<div class="section"><h2>Reinsurance Placement Compliance Checklist</h2><div class="tw"><table><thead><tr><th class="num">Number</th><th>Description</th><th>Response</th><th>Date</th><th>Broker Notes</th><th class="num">Score Awarded</th><th class="num">Score Potential</th></tr></thead><tbody>' + rows +
+    '<tr class="total"><td colspan="4"></td><th scope="row" style="text-align:right">Audit Score</th><td class="num">' + calc(() => (auditScore(p) * 100).toFixed(2) + '%') + '</td><td class="num">' + calc(() => String(totalPotential(p))) + '</td></tr>' +
+    '<tr><td colspan="4"></td><th scope="row" style="text-align:right">Risk Assessment</th><td class="num" colspan="2">' + calc(() => riskPill(auditScore(p))) + '</td></tr></tbody></table></div>' +
+    '<label class="f">Additional Comments' + inp(p, 'comments', 'long') + '</label><p class="note fine">' + esc(CHECK_NOTE) + '</p></div>';
+}
+
+/* ---- Req 3: shared reinsurer list ---- */
+function viewReinsurers() {
+  const body = byDomicile(S.reinsurers, r => r.domicile).map(([d, rs]) =>
+    '<tr class="group"><td class="stick">' + esc(d) + '</td><td colspan="13"></td></tr>' + rs.map(r =>
+      '<tr><td class="stick">' + inp(r, 'name', 'long', { label: 'Full Legal Entity Name' }) + '</td><td>' + inp(r, 'domicile', 'text', { label: 'Domicile', rerender: true }) + '</td><td>' + inp(r, 'naic', 'text', { label: 'NAIC / AIIN' }) + '</td><td>' + inp(r, 'fein', 'text', { label: 'FEIN' }) + '</td>' +
+      '<td>' + inp(r, 'spRating', 'text', { label: 'S&P Rating', cls: 'w-pct' }) + '</td><td>' + inp(r, 'spOutlook', 'text', { label: 'S&P Outlook', cls: 'w-pct' }) + '</td><td>' + inp(r, 'spDate', 'date', { label: 'S&P Date' }) + '</td>' +
+      '<td>' + inp(r, 'amRating', 'text', { label: 'A. M. Best Rating', cls: 'w-pct' }) + '</td><td>' + inp(r, 'amOutlook', 'text', { label: 'A. M. Best Outlook', cls: 'w-pct' }) + '</td><td>' + inp(r, 'amDate', 'date', { label: 'A. M. Best Date' }) + '</td>' +
+      '<td>' + inp(r, 'surplus', 'money', { label: "Policy Holder Surplus (000's)" }) + '</td><td>' + inp(r, 'underwriter', 'text', { label: 'Underwriter' }) + '</td><td>' + inp(r, 'email', 'text', { label: 'Email', cls: 'w-long' }) + '</td><td>' + inp(r, 'phone', 'text', { label: 'Phone Number' }) + '</td></tr>').join('')).join('');
+  return '<div class="pagehead"><h1>Reinsurers</h1><span class="spacer"></span><button class="btn" ' + act(() => { S.reinsurers.push({ id: 'r' + Date.now(), name: 'New reinsurer' }); save(); render(); }) + '>Add reinsurer</button></div>' +
+    '<div class="section"><p class="note">Entered once here and read by every placement. A change here shows on the Market Tracker and Quote Summary straight away. <b>For Matt:</b> the workbook says NAIC / AAIN on Marketing List and NAIC/AIIN elsewhere. AIIN is used throughout.</p>' +
+    '<div class="tw"><table><thead><tr><th class="stick">Full Legal Entity Name</th><th>Domicile</th><th>NAIC / AIIN</th><th>FEIN</th><th>S&amp;P Rating</th><th>S&amp;P Outlook</th><th>S&amp;P Date</th><th>A. M. Best Rating</th><th>A. M. Best Outlook</th><th>A. M. Best Date</th><th>Policy Holder Surplus (000\'s)</th><th>Underwriter</th><th>Email</th><th>Phone Number</th></tr></thead><tbody>' + body + '</tbody></table></div></div>';
+}
+
+function render() {
+  reset();
+  renderTop();
+  const html = route.view === 'reinsurers' ? viewReinsurers() : route.view === 'placement' ? viewPlacement() : viewPlacements();
+  document.getElementById('app').innerHTML = html;
+  sizeAreas();
+}
+route = parseHash();
+render();
+</script>
+
+</body>
+</html>
